@@ -41,42 +41,28 @@ jobs:
       - name: Build Tauri Windows app
         run: npx tauri build
 
-      - name: Smoke test Windows installer
+      - name: Smoke test Windows setup executable
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Filter "*.msi" | Select-Object -First 1
-          if (-not $msi) {
-            throw "No MSI installer was generated."
+          $setup = Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Filter "*setup.exe" | Select-Object -First 1
+          if (-not $setup) {
+            throw "No NSIS setup executable was generated."
           }
 
-          $log = Join-Path $env:RUNNER_TEMP "erp-msi-install.log"
-          $install = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", $msi.FullName, "/qn", "/norestart", "/L*v", $log) -Wait -PassThru
+          $install = Start-Process -FilePath $setup.FullName -ArgumentList "/S" -PassThru
+          if (-not $install.WaitForExit(120000)) {
+            Stop-Process -Id $install.Id -Force -ErrorAction SilentlyContinue
+            throw "NSIS setup timed out during silent install."
+          }
           if ($install.ExitCode -ne 0) {
-            Get-Content $log -Tail 200
-            throw "MSI install failed with exit code $($install.ExitCode)."
+            throw "NSIS setup failed with exit code $($install.ExitCode)."
           }
 
-          $uninstallKeys = @(
-            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
-            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-            "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
-          )
-
-          $installInfo = $uninstallKeys |
-            ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } |
-            Where-Object { $_.DisplayName -eq "ERP System" } |
-            Select-Object -First 1
-
-          $candidatePaths = @()
-          if ($installInfo -and $installInfo.InstallLocation) {
-            $candidatePaths += Join-Path $installInfo.InstallLocation "ERP System.exe"
-          }
-
-          $candidatePaths += @(
-            (Join-Path $env:ProgramFiles "ERP System\ERP System.exe"),
-            (Join-Path ${env:ProgramFiles(x86)} "ERP System\ERP System.exe"),
+          $candidatePaths = @(
             (Join-Path $env:LOCALAPPDATA "Programs\ERP System\ERP System.exe"),
-            (Join-Path $env:LOCALAPPDATA "ERP System\ERP System.exe")
+            (Join-Path $env:LOCALAPPDATA "ERP System\ERP System.exe"),
+            (Join-Path $env:ProgramFiles "ERP System\ERP System.exe"),
+            (Join-Path ${env:ProgramFiles(x86)} "ERP System\ERP System.exe")
           )
 
           $exe = $candidatePaths |
