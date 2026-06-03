@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.erp.system",
   "build": {
-    "frontendDist": "../dist/public",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "frontendDist": "http://test.mzbloodbridge.pk/",
+    "devUrl": "http://test.mzbloodbridge.pk/",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
   },
   "app": {
     "windows": [
