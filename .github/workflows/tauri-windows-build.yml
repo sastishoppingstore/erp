@@ -41,6 +41,45 @@ jobs:
       - name: Build Tauri Windows app
         run: npx tauri build
 
+      - name: Smoke test Windows installer
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path "src-tauri/target/release/bundle" -Recurse -Filter "*.msi" | Select-Object -First 1
+          if (-not $msi) {
+            throw "No MSI installer was generated."
+          }
+
+          $log = Join-Path $env:RUNNER_TEMP "erp-msi-install.log"
+          $install = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", $msi.FullName, "/qn", "/norestart", "/L*v", $log) -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            Get-Content $log -Tail 200
+            throw "MSI install failed with exit code $($install.ExitCode)."
+          }
+
+          $searchRoots = @(
+            $env:ProgramFiles,
+            ${env:ProgramFiles(x86)},
+            $env:LOCALAPPDATA
+          ) | Where-Object { $_ -and (Test-Path $_) }
+
+          $exe = $searchRoots |
+            ForEach-Object { Get-ChildItem -Path $_ -Recurse -Filter "ERP System.exe" -ErrorAction SilentlyContinue } |
+            Select-Object -First 1
+
+          if (-not $exe) {
+            throw "Installed ERP System.exe was not found."
+          }
+
+          $process = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 10
+
+          $running = Get-Process -Id $process.Id -ErrorAction SilentlyContinue
+          if (-not $running) {
+            throw "ERP System.exe exited immediately after launch."
+          }
+
+          Stop-Process -Id $process.Id -Force
+
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
