@@ -42,9 +42,9 @@ jobs:
         shell: pwsh
         run: |
           $baseUrl = "http://test.mzbloodbridge.pk"
-          $home = Invoke-WebRequest -Uri $baseUrl -UseBasicParsing -TimeoutSec 30
-          if ($home.StatusCode -ne 200) {
-            throw "Live ERP site returned HTTP $($home.StatusCode)."
+          $homeResponse = Invoke-WebRequest -Uri $baseUrl -UseBasicParsing -TimeoutSec 30
+          if ($homeResponse.StatusCode -ne 200) {
+            throw "Live ERP site returned HTTP $($homeResponse.StatusCode)."
           }
 
           $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
