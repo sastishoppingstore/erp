@@ -7,19 +7,25 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  build-windows:
+    name: Build Windows desktop app
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -32,21 +38,16 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build frontend + backend
-        run: npm run build
-
-      - name: Install Tauri CLI
-        run: npm install --save-dev @tauri-apps/cli@latest
-
       - name: Build Tauri Windows app
         run: npx tauri build
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: erp-windows-installer
-          path: src-tauri/target/release/bundle/
+          path: |
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.zip
+          if-no-files-found: error
           compression-level: 0
