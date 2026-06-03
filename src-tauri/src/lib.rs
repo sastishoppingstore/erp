@@ -1,3 +1,5 @@
+use tauri_plugin_sql::{Migration, MigrationKind};
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -6,7 +8,7 @@ pub fn run() {
     .plugin(tauri_plugin_store::Builder::default().build())
     .plugin(
       tauri_plugin_sql::Builder::default()
-        .add_migrations("sqlite:erp.db", migrations)
+        .add_migrations("sqlite:erp.db", get_migrations())
         .build(),
     )
     .setup(|app| {
@@ -23,10 +25,12 @@ pub fn run() {
     .expect("error while running tauri application");
 }
 
-fn migrations(ver: &str) -> Result<Vec<&'static str>, Box<dyn std::error::Error>> {
-  match ver {
-    "0.1.0" => Ok(vec![
-      "CREATE TABLE IF NOT EXISTS products (
+fn get_migrations() -> Vec<Migration> {
+  vec![
+    Migration {
+      version: 1,
+      description: "create initial tables",
+      sql: "CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         server_id INTEGER,
         tenant_id INTEGER,
@@ -387,8 +391,8 @@ fn migrations(ver: &str) -> Result<Vec<&'static str>, Box<dyn std::error::Error>
         server_id INTEGER,
         deleted_at TEXT DEFAULT (datetime('now')),
         synced INTEGER DEFAULT 0
-      );
-    "]),
-    _ => Err("Migration version not supported".into()),
-  }
+      );",
+      kind: MigrationKind::Up,
+    },
+  ]
 }
