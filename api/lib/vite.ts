@@ -14,8 +14,8 @@ export function serveStaticFiles(app: App) {
   app.use("*", serveStatic({ root: distPath }));
 
   app.notFound((c) => {
-    const accept = c.req.header("accept") ?? "";
-    if (!accept.includes("text/html")) {
+    const url = new URL(c.req.url);
+    if (url.pathname.startsWith("/api/")) {
       return c.json({ error: "Not Found" }, 404);
     }
     const indexPath = path.resolve(distPath, "index.html");
