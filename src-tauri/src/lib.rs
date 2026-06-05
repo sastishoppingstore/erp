@@ -1,10 +1,16 @@
 use std::{
+  fs::{self, OpenOptions},
+  io::Write,
   net::{TcpStream, ToSocketAddrs},
+  path::Path,
   time::{Duration, Instant},
 };
 
 use tauri::Manager;
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
+use tauri_plugin_shell::{
+  process::{CommandChild, CommandEvent},
+  ShellExt,
+};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 struct BackendChild(Option<CommandChild>);
@@ -48,9 +54,20 @@ fn start_local_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
   let resource_dir = app.path().resource_dir()?;
   let boot_script = resource_dir.join("dist").join("boot.js");
   let static_dir = resource_dir.join("dist").join("public");
+  let backend_log = std::env::temp_dir().join("erp-system-backend.log");
   let backend_port = "32145";
 
-  let (_rx, child) = app
+  write_backend_log(
+    &backend_log,
+    &format!(
+      "Starting backend\nresource_dir={}\nboot_script={}\nstatic_dir={}\n",
+      resource_dir.display(),
+      boot_script.display(),
+      static_dir.display(),
+    ),
+  );
+
+  let (mut rx, child) = app
     .shell()
     .sidecar("node")?
     .arg(boot_script)
@@ -58,6 +75,7 @@ fn start_local_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     .env("NODE_ENV", "production")
     .env("HOST", "127.0.0.1")
     .env("PORT", backend_port)
+    .env("ERP_BACKEND_LOG", &backend_log)
     .env("ERP_STATIC_DIR", static_dir)
     .env("APP_ID", std::env::var("APP_ID").unwrap_or_else(|_| "desktop_app".into()))
     .env(
@@ -79,9 +97,39 @@ fn start_local_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
     )
     .spawn()?;
 
+  let backend_log_for_task = backend_log.clone();
+  tauri::async_runtime::spawn(async move {
+    while let Some(event) = rx.recv().await {
+      let line = match event {
+        CommandEvent::Stdout(bytes) => {
+          format!("[stdout] {}", String::from_utf8_lossy(&bytes))
+        }
+        CommandEvent::Stderr(bytes) => {
+          format!("[stderr] {}", String::from_utf8_lossy(&bytes))
+        }
+        CommandEvent::Error(error) => format!("[error] {error}\n"),
+        CommandEvent::Terminated(payload) => {
+          format!("[terminated] code={:?} signal={:?}\n", payload.code, payload.signal)
+        }
+        _ => continue,
+      };
+      write_backend_log(&backend_log_for_task, &line);
+    }
+  });
+
   app.manage(BackendChild(Some(child)));
   wait_for_backend("127.0.0.1:32145", Duration::from_secs(15))?;
   Ok(())
+}
+
+fn write_backend_log(path: &Path, message: &str) {
+  if let Some(parent) = path.parent() {
+    let _ = fs::create_dir_all(parent);
+  }
+
+  if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+    let _ = file.write_all(message.as_bytes());
+  }
 }
 
 fn wait_for_backend(addr: &str, timeout: Duration) -> Result<(), Box<dyn std::error::Error>> {

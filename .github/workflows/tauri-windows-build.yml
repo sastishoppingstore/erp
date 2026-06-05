@@ -99,7 +99,17 @@ jobs:
             throw "ERP System.exe exited immediately after launch."
           }
 
-          $response = Invoke-WebRequest "http://127.0.0.1:32145/app" -UseBasicParsing -TimeoutSec 10
+          $backendLog = Join-Path $env:TEMP "erp-system-backend.log"
+          try {
+            $response = Invoke-WebRequest "http://127.0.0.1:32145/app" -UseBasicParsing -TimeoutSec 10
+          } catch {
+            if (Test-Path $backendLog) {
+              Write-Host "===== ERP backend log ====="
+              Get-Content $backendLog
+              Write-Host "===== End ERP backend log ====="
+            }
+            throw
+          }
           if ($response.StatusCode -ne 200) {
             throw "ERP local app route returned HTTP $($response.StatusCode)."
           }
