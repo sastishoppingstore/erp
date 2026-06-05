@@ -130,6 +130,29 @@ jobs:
             throw "ERP local app route did not return the bundled frontend."
           }
 
+          $ping = Invoke-WebRequest "http://127.0.0.1:32145/api/ping" -UseBasicParsing -TimeoutSec 10
+          if ($ping.StatusCode -ne 200) {
+            throw "ERP local API ping returned HTTP $($ping.StatusCode)."
+          }
+          if (-not ($ping.Content -match '"ok"\s*:\s*true')) {
+            throw "ERP local API ping did not return ok=true."
+          }
+
+          $loginBody = '{"0":{"json":{"username":"wafaweb","password":"Wafa@1122"}}}'
+          $login = Invoke-WebRequest `
+            "http://127.0.0.1:32145/api/trpc/auth.passwordLogin?batch=1" `
+            -Method POST `
+            -ContentType "application/json" `
+            -Body $loginBody `
+            -UseBasicParsing `
+            -TimeoutSec 15
+          if ($login.StatusCode -ne 200) {
+            throw "ERP local login API returned HTTP $($login.StatusCode)."
+          }
+          if (-not ($login.Content -match '"success"\s*:\s*true')) {
+            throw "ERP local login API did not return success=true."
+          }
+
           Stop-Process -Id $process.Id -Force
 
       - name: Upload Windows installer artifact
