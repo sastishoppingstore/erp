@@ -51,7 +51,7 @@ pub fn run() {
 }
 
 fn start_local_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-  let resource_dir = app.path().resource_dir()?;
+  let resource_dir = normalize_node_path(&app.path().resource_dir()?);
   let boot_script = resource_dir.join("dist").join("boot.js");
   let static_dir = resource_dir.join("dist").join("public");
   let backend_log = std::env::temp_dir().join("erp-system-backend.log");
@@ -120,6 +120,23 @@ fn start_local_backend(app: &mut tauri::App) -> Result<(), Box<dyn std::error::E
   app.manage(BackendChild(Some(child)));
   wait_for_backend("127.0.0.1:32145", Duration::from_secs(15))?;
   Ok(())
+}
+
+fn normalize_node_path(path: &Path) -> std::path::PathBuf {
+  let path_string = path.to_string_lossy();
+
+  #[cfg(windows)]
+  {
+    if let Some(stripped) = path_string.strip_prefix(r"\\?\UNC\") {
+      return std::path::PathBuf::from(format!(r"\\{stripped}"));
+    }
+
+    if let Some(stripped) = path_string.strip_prefix(r"\\?\") {
+      return std::path::PathBuf::from(stripped);
+    }
+  }
+
+  std::path::PathBuf::from(path_string.as_ref())
 }
 
 fn write_backend_log(path: &Path, message: &str) {
